@@ -1,18 +1,10 @@
-import json
+
 from datetime import datetime, timedelta
+from errors import EmptyProductListException
+from reader import read_file
+from constants import FILE_NAME, DELTA_WEEKS, LIMIT
 
-def read_file() -> list:
-    """Read a .json file
-
-    Returns:
-        dict: Read JSON
-    """
-    f = open("products.json", "r")
-    data = json.load(f)
-    f.close()
-    return data
-
-def apply_filter(data: list,  filter_function: callable) -> list:
+def apply_filter(data: list) -> list:
     """Apply callback filter function to a list
 
     Args:
@@ -22,8 +14,8 @@ def apply_filter(data: list,  filter_function: callable) -> list:
     Returns:
         list: Filtered list
     """
-    result: list = list(filter(filter_function, data))
-    return result
+    filter_date: datetime = datetime.now() - timedelta(weeks=DELTA_WEEKS)
+    return [x for x in data if datetime.strptime(x['updated_at'], "%Y-%m-%d") > filter_date]
 
 def sort_by_key(data: list, key, reverse=True) -> list:
     """Sort a list of objects by a key property
@@ -57,26 +49,32 @@ def calculate_top_average_rating(data: list, limit: int=-1) -> float:
         if iterated_items == limit:
             break
     if iterated_items == 0: # Avoid zero division if list is empty.
-        return 0
-    return acum_rating / iterated_items
+        raise EmptyProductListException
+    return acum_rating / iterated_items     
 
 
 if __name__ == "__main__":
     # First read the file
-    products: list = read_file()
+    try:
+        products: list = read_file(FILE_NAME)
 
+        # Apply filter
+        products: list = apply_filter(products)
 
-    # Create 3 months difference date and lambda function to apply filter
-    filter_date: datetime = datetime.now() - timedelta(weeks=12)
-    filter_lambda_function = lambda x: datetime.strptime(x['updated_at'], "%Y-%m-%d") > filter_date
-    products: list = apply_filter(products, filter_lambda_function)
+        # Sort by price
+        products = sort_by_key(products, key=lambda x: x["price"])
 
-    # Sort by price
-    products = sort_by_key(products, key=lambda x: x["price"])
-
-    # Calculate top average
-    average_rating: float = calculate_top_average_rating(products, 10)
-    print("%.2f" % average_rating)
+        # Calculate top average
+        average_rating: float = calculate_top_average_rating(products, LIMIT)
+        print("%.2f" % average_rating)
+    except FileNotFoundError as e:
+        print("File does not exist")
+        print(e)
+    except EmptyProductListException as e:
+        print(e.message)
+    except Exception as e:
+        print("Something went wrong")
+        print(e)
 
 
     
